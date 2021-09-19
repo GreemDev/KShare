@@ -7,15 +7,17 @@ import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import spark.Redirect
 import spark.Spark.*
+import spark.kotlin.after
 import java.io.File
 import java.util.*
 import javax.servlet.MultipartConfigElement
 
-class Share private constructor() {
+class KShare private constructor() {
 
     companion object {
-        private lateinit var share: Share
+        private lateinit var share: KShare
         fun get() = share
         fun init() {
 
@@ -30,34 +32,37 @@ class Share private constructor() {
                 SchemaUtils.create(*allTables())
             }
 
-            Share()
+            share = KShare()
         }
     }
 
     init {
         port(ServerConfig.port())
 
+        threadPool(25, 5, 5000)
+
         if (ServerConfig.allowAPI())
             enablePublicAPI()
 
-        Thread.sleep(200)
-
-        after("/:id/*") { req, resp ->
+        after("/*") { req, resp ->
             if (resp.status() == 200) {
-                val uuid = tryOrNull { UUID.fromString(req.params(":id")) } ?: return@after
+                val fileQuery = tryOrNull { req.splat().first().split('.') }
+
+                if (fileQuery == null || fileQuery.size != 2) return@after
+
+                val uuid = fileQuery.first().toUUID() ?: return@after
                 transaction {
                     val fileEntry = FileEntry[uuid]
+                    val newHitCount = fileEntry.hits.inc()
                     FileEntries.update {
-                        it[hits] = fileEntry.hits.inc()
+                        it[hits] = newHitCount
                     }
-                    logger<Share>().info("${req.params(":id")} is now at ${fileEntry.hits.inc()} hits.")
+                    logger<KShare>().info("$uuid is now at $newHitCount hit${if (newHitCount != 1) "s" else ""}.")
                 }
             }
         }
 
-        get("/") { _, resp ->
-            resp.redirect("https://github.com/GreemDev/KShare", 301)
-        }
+        redirect.get("/", "https://github.com/GreemDev/KShare", Redirect.Status.MOVED_PERMANENTLY)
 
         afterAfter { req, resp ->
             val location = buildString {
@@ -73,11 +78,20 @@ class Share private constructor() {
                         ""
                 )
             }
-            logger<Share>().info("${req.requestMethod()} $location -> ${resp.status()}")
+            logger<KShare>().info("${req.requestMethod()} $location -> ${resp.status()}")
         }
 
-        get("/:id/*") { req, resp ->
-            val uuid = tryOrNull { UUID.fromString(req.params(":id")) }
+        get("/*") { req, resp ->
+            val fileQuery = req.splat().first().split('.')
+
+            if (fileQuery.size != 2)
+                halt(418, html {
+                    h1 {
+                        text("I'm a teapot that only likes properly-formed URLs.")
+                    }
+                })
+
+            val uuid = fileQuery.first().toUUID()
             if (uuid == null) {
                 resp.halt(418, html {
                     h1 {
@@ -105,12 +119,15 @@ class Share private constructor() {
             }
         }
 
+        after("/", "put") {
+            response.header("Content-Encoding", "gzip")
+        }
+
         put("/") { req, resp ->
             req.attribute("org.eclipse.jetty.multipartConfig", MultipartConfigElement("/temp"))
-            val providedKey = req.raw().getPart("key")?.inputStream?.asString()
-            val urlPrefs = req.raw().getPart("settings")?.inputStream?.asString()?.split(' ') ?: listOf()
+            val prefs = req.raw().getPart("settings")?.inputStream?.asString()?.split(' ') ?: listOf()
 
-            if (!ServerConfig.authorized(providedKey)) {
+            if (!ServerConfig.authorized(req.raw().getPart("key")?.inputStream?.asString())) {
                 resp.halt(403, "Action forbidden.")
             } else {
                 try {
@@ -121,14 +138,12 @@ class Share private constructor() {
 
                     val uuid = UUID.randomUUID()
 
-                    val extension = loggedTransaction {
+                    loggedTransaction {
                         FileEntries.insert {
                             it[id] = uuid
-                            it[hits] = 0
-                            it[extension] = tryOrNull { filePart.submittedFileName.split('.').last() } ?: ""
                             it[type] = filePart.contentType
                             it[data] = filePart.inputStream.blobify()
-                        } get FileEntries.extension
+                        }
                     }
 
                     buildString {
@@ -140,12 +155,12 @@ class Share private constructor() {
                                 )
                             .ensureAtEnd("/")
                         )
-                        append(uuid)
+                        append(uuid.shorten())
 
-                        if (urlPrefs.contains("namedFile"))
-                            append("/${filePart.submittedFileName}")
-                        else if (extension.isNotEmpty())
-                            append("/file.${extension}")
+                        val ext = filePart.submittedFileName.split('.').last()
+
+                        if (ext.isNotEmpty())
+                            append(".${ext}")
                     }
 
                 } catch (t: Throwable) {
@@ -153,8 +168,6 @@ class Share private constructor() {
                 }
             }
         }
-
-        share = this
     }
 
 }

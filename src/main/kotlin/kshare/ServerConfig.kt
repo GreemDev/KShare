@@ -16,8 +16,7 @@ class ServerConfig {
 
     companion object {
 
-        fun authorized(key: String?): Boolean
-            = auth() == key
+        fun authorized(key: String?): Boolean = auth() == key
 
         fun auth() = get()!!.authKey
         fun host() = get()!!.host

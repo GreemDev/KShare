@@ -13,7 +13,6 @@ fun allTables(): Array<Table> = arrayOf(
 object FileEntries : UUIDTable() {
     val hits = integer("hits").default(0)
     val type = varchar("type", 50)
-    val extension = varchar("ext", 25)
     val data = blob("data")
 }
 
@@ -22,6 +21,5 @@ class FileEntry(id: EntityID<UUID>) : UUIDEntity(id) {
 
     var hits by FileEntries.hits
     var type by FileEntries.type
-    val extension by FileEntries.extension
     var data by FileEntries.data
 }

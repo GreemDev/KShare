@@ -6,10 +6,6 @@ import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.sql.Table
 import java.util.*
 
-fun allTables(): Array<Table> = arrayOf(
-    FileEntries
-)
-
 object FileEntries : UUIDTable() {
     val hits = integer("hits").default(0)
     val type = varchar("type", 50)

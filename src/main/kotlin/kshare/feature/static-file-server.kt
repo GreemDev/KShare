@@ -33,10 +33,6 @@ fun enableStaticFileServer() {
         }
 
         if (File("staticFiles/").absolutePath !in file.absolutePath) {
-            with("Test".logger()) {
-                info("f: ${file.absolutePath}")
-                info("d: ${File("staticFiles/").absolutePath}")
-            }
             halt {
                 h1 {
                     text("Invalid result path.")

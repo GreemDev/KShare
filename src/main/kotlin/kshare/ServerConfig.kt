@@ -1,73 +1,82 @@
 package kshare
 
-import com.google.gson.Gson
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import spark.Request
-import spark.Spark
 import java.io.File
+import kotlin.properties.Delegates
 import kotlin.system.exitProcess
 
+val json = Json {
+    prettyPrint = true
+    encodeDefaults = true
+}
 
 @Suppress("ArrayInDataClass")
+@Serializable
 data class ServerConfig(
-    private val validAuthKeys: Array<String> = arrayOf("1+ keys here"), // Authorization key for uploading files.
-    private val host: String = "https://your-url.here",                 // Your KShare domain, because this app only ever gives you localhost.
-    private val enableApi: Boolean = true,                              // Whether to enable the bare-bones statistics API or not.
-    private val port: Int = 6969, // ha, funny number                   // The port to host the server on.
-    private val production: Boolean = false,                            // Whether to use the `host` URL for uploading files or just the localhost URL.
-    private val dataFileName: String = "kshare"                         // The name for your database file.
+    val validAuthKeys: Array<String> = arrayOf("1+ keys here"), // Authorization key for uploading files.
+    val host: String = "https://your-url.here",                 // Your KShare domain, because this app only ever gives you localhost.
+    val enableApi: Boolean = true,                              // Whether to enable the bare-bones statistics API or not.
+    val port: Int = 6969, // ha, funny number                   // The port to host the server on.
+    val production: Boolean = false,                            // Whether to use the `host` URL for uploading files or just the localhost URL.
+    val dataFileName: String = "kshare"                         // The name for your database file.
 ) {
 
     companion object {
 
-        private fun gson(): Gson = gson { setPrettyPrinting() }
+        fun authorized(key: String?): Boolean = key in authKeys
+        fun unauthorized(key: String?): Boolean = key !in authKeys
 
-        fun authorized(key: String?): Boolean = auth().any { it == key }
-        fun unauthorized(key: String?): Boolean = !authorized(key)
+        fun effectiveHost(request: Request, modifier: String.() -> String = { this }): String =
+            modifier(buildString(request.url()) {
+                if (isProduction)
+                    replace(0, "http://localhost:${port}".length.inc(), host)
+            })
 
-        fun effectiveHost(request: Request): String = buildString(request.url()) {
-            if (isProd())
-                replace(0, "http://localhost:${port()}".length.inc(), host())
-        }
-
-        fun auth() = get()!!.validAuthKeys
-        fun host() = get()!!.host
-        fun allowAPI() = get()!!.enableApi
-        fun port() = get()!!.port
-        fun isProd() = get()!!.production
-        fun databaseName() = get()!!.dataFileName
+        val authKeys by Delegates.invoking { readConfig()!!.validAuthKeys }
+        val host by Delegates.invoking { readConfig()!!.host }
+        val apiEnabled by Delegates.invoking { readConfig()!!.enableApi }
+        val port by Delegates.invoking { readConfig()!!.port }
+        val isProduction by Delegates.invoking { readConfig()!!.production }
+        val databaseRootName by Delegates.invoking { readConfig()!!.dataFileName }
 
         fun checks() {
-            if (!file().exists()) {
+            if (!file.exists()) {
                 write()
                 logger().warn("Please fill in the config.json file and restart!")
                 exitProcess(69)
             }
-            if (file().readText().isEmpty())
+            if (file.readText().isEmpty())
                 write()
 
-            if (get()!!.validAuthKeys.any { it == "1+ keys here" } or get()!!.validAuthKeys.isEmpty()) {
-                logger().warn("You need to provide an authKey in order to start the server.")
-                exitProcess(420)
+            readConfig()!!.run {
+                if (validAuthKeys.any { it == "1+ keys here" } or validAuthKeys.isEmpty()) {
+                    logger().warn("You need to provide an authKey in order to start the server.")
+                    exitProcess(420)
+                }
             }
         }
-        fun file() = File("config.json").apply {
-            if (exists()) {
-                setReadable(true)
-                setWritable(true)
-            } else {
-                createNewFile()
+
+        val file by Delegates.invoking {
+            File("config.json").apply {
+                if (exists()) {
+                    setReadable(true)
+                    setWritable(true)
+                }
             }
         }
 
         fun write(config: ServerConfig = ServerConfig()) {
-            file().writeText(gson().toJson(config))
+            file.writeText(json.encodeToString(config))
         }
 
-        fun get(): ServerConfig? =
-            try {
-                gson().fromJson<ServerConfig>(file().readText())
-            } catch (e: Exception) {
-                e.printStackTrace()
+        fun readConfig(): ServerConfig? =
+            runCatching {
+                json.decodeFromString<ServerConfig>(file.readText())
+            }.getOrElse {
+                it.printStackTrace()
                 null
             }
     }

@@ -10,28 +10,26 @@ repositories {
 }
 
 plugins {
-    kotlin("jvm") version "1.5.31"
+    kotlin("jvm") version "1.9.0"
+    kotlin("plugin.serialization") version "1.9.0"
     id("com.github.johnrengelman.shadow") version "7.0.0"
     application
 }
 
 dependencies {
 
-    fun exposed(module: String) = "org.jetbrains.exposed:exposed-$module:0.34.2"
+    fun exposed(module: String) = "org.jetbrains.exposed:exposed-$module:0.42.0"
 
     implementation("ch.qos.logback", "logback-classic", "1.2.3")
     implementation("org.slf4j", "slf4j-jdk14", "1.7.32")
     implementation("com.h2database", "h2", "1.4.200")
     implementation("com.sparkjava", "spark-kotlin", "1.0.0-alpha")
-    implementation("com.google.code.gson", "gson", "2.8.8")
+    implementation("org.jetbrains.kotlinx", "kotlinx-serialization-json", "1.6.0-RC")
     implementation(exposed("core"))
     implementation(exposed("dao"))
     implementation(exposed("jdbc"))
     implementation("com.github.daggerok", "kotlin-html-dsl", "1.0.DOM")
-}
-
-tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "11"
+    implementation(kotlin("stdlib-jdk8"))
 }
 
 tasks.withType<ShadowJar> {
@@ -39,5 +37,14 @@ tasks.withType<ShadowJar> {
 }
 
 application {
-    mainClass.set("kshare.KShare")
+    mainClass.set("kshare.KShareServer")
+}
+
+val compileKotlin: KotlinCompile by tasks
+compileKotlin.kotlinOptions {
+    jvmTarget = "1.8"
+}
+val compileTestKotlin: KotlinCompile by tasks
+compileTestKotlin.kotlinOptions {
+    jvmTarget = "1.8"
 }

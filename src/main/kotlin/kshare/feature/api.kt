@@ -1,13 +1,10 @@
-package kshare
+package kshare.feature
 
 import org.eclipse.jetty.http.HttpStatus
 import org.jetbrains.exposed.sql.transactions.transaction
-import spark.HaltException
-import spark.Request
-import spark.Response
-import spark.Spark
-import spark.Spark.get
-import spark.Spark.path
+import kshare.*
+import spark.*
+import spark.Spark.*
 import java.io.File
 
 enum class FileSize {
@@ -18,9 +15,9 @@ enum class FileSize {
 
     companion object {
         fun parse(fileSizeName: String) = when (fileSizeName.lowercase()) {
-            "gigabytes", "gb" -> Gigabytes
-            "megabytes", "mb" -> Megabytes
-            "kilobytes", "kb" -> Kilobytes
+            "gigabytes", "giga", "gb", "g" -> Gigabytes
+            "megabytes", "mega", "mb", "m" -> Megabytes
+            "kilobytes", "kilo", "kb", "k" -> Kilobytes
             "bytes", "b" -> Bytes
             else -> null
         }
@@ -29,7 +26,7 @@ enum class FileSize {
 
 fun Number.asFileSize(fileSize: FileSize = FileSize.Megabytes): String {
 
-    fun Number.tier(): Number = this.toLong() / 1024
+    fun Number.tier(): Number = toLong() / 1024
 
     return when (fileSize) {
         FileSize.Bytes -> "$this B"
@@ -57,9 +54,9 @@ fun hitsById(req: Request, resp: Response): Any {
 
 fun dataFileSize(req: Request, resp: Response): Any {
     val fileSize = get { FileSize.parse(req.params(":type")) }
-        .orHalt(HttpStatus.BAD_REQUEST_400, "Invalid file size type. Think kilobytes and mb, and related.")
+        .orHalt(HttpStatus.BAD_REQUEST_400, "Invalid file size type. Think kilobytes, mb, and related.")
 
-    return File("${ServerConfig.databaseName()}.mv.db").length().asFileSize(fileSize)
+    return File("${ServerConfig.databaseRootName}.mv.db").length().asFileSize(fileSize)
 }
 
 fun uploadedFileSize(req: Request, resp: Response): Any {

@@ -13,15 +13,19 @@ val json = Json {
     encodeDefaults = true
 }
 
+private val defaultBlacklistedStaticFiles = arrayOf(".gitkeep", ".gitignore")
+
 @Suppress("ArrayInDataClass")
 @Serializable
 data class ServerConfig(
-    val validAuthKeys: Array<String> = arrayOf("1+ keys here"), // Authorization key for uploading files.
-    val host: String = "https://your-url.here",                 // Your KShare domain, because this app only ever gives you localhost.
-    val enableApi: Boolean = true,                              // Whether to enable the bare-bones statistics API or not.
-    val port: Int = 6969, // ha, funny number                   // The port to host the server on.
-    val production: Boolean = false,                            // Whether to use the `host` URL for uploading files or just the localhost URL.
-    val dataFileName: String = "kshare"                         // The name for your database file.
+    val validAuthKeys: Array<String> = arrayOf("1+ keys here"),                    // Authorization key for uploading files.
+    val host: String = "https://your-url.here",                                    // Your KShare domain, because this app only ever gives you localhost.
+    val enableApi: Boolean = true,                                                 // Whether to enable the bare-bones statistics API or not.
+    val port: Int = 6969, // ha, funny number                                      // The port to host the server on.
+    val production: Boolean = false,                                               // Whether to use the `host` URL for uploading files or just the localhost URL.
+    val allowStaticFileDiscovery: Boolean = false,                                 // Whether to allow anyone to see every file in staticFiles/ via using the `/fs` base URL with no path provided
+    val blacklistedStaticFiles: Array<String> = defaultBlacklistedStaticFiles,     // Whether to allow anyone to see every file in staticFiles/ via using the `/fs` base URL with no UUID
+    val dataFileName: String = "kshare"                                            // The name for your database file.
 ) {
 
     companion object {
@@ -40,6 +44,8 @@ data class ServerConfig(
         val apiEnabled by Delegates.invoking { readConfig()!!.enableApi }
         val port by Delegates.invoking { readConfig()!!.port }
         val isProduction by Delegates.invoking { readConfig()!!.production }
+        val shouldAllowStaticFileDiscovery by Delegates.invoking { tryOrNull { readConfig()!!.allowStaticFileDiscovery } ?: false }
+        val blacklistedStaticFiles by Delegates.invoking { tryOrNull { readConfig()!!.blacklistedStaticFiles } ?: defaultBlacklistedStaticFiles }
         val databaseRootName by Delegates.invoking { readConfig()!!.dataFileName }
 
         fun checks() {

@@ -1,7 +1,6 @@
 package kshare
 
 import daggerok.extensions.html.dom.HtmlBuilder
-import daggerok.extensions.html.dom.html
 import org.eclipse.jetty.http.HttpStatus
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.*
@@ -12,6 +11,7 @@ import org.slf4j.LoggerFactory
 import spark.Request
 import spark.Spark
 import spark.utils.IOUtils
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
@@ -87,6 +87,18 @@ fun UUID.shorten(): String {
         .trimEnd { it == '=' }
 
 }
+
+val File.areAnyParentsHidden: Boolean
+    get() {
+        var parent: File? = parentFile
+
+        while (parent != null) {
+            if (parent.isHidden) return true
+            parent = parent.parentFile
+        }
+
+        return false
+    }
 
 fun StringBuilder.appendIf(condition: Boolean, func: () -> String): StringBuilder {
     if (condition)

@@ -3,16 +3,42 @@ package kshare.feature
 import daggerok.extensions.html.dom.h1
 import kshare.*
 import org.eclipse.jetty.http.HttpStatus
+import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import spark.Spark.*
+import java.io.File
 import java.io.OutputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.UUID
+import javax.servlet.http.Part
+import kotlin.io.path.Path
+import kotlin.io.path.createDirectory
+import kotlin.io.path.notExists
 
 fun enableFileDestination() {
     put()
     get()
     afterGet()
+}
+
+fun writeUpload(part: Part): Pair<UUID, String> {
+    val uploadsFolder = Path("uploads/")
+    if (uploadsFolder.notExists())
+        uploadsFolder.createDirectory()
+
+    val randomUUID = UUID.randomUUID()
+
+    val uniqueSubfolder = uploadsFolder.resolve(randomUUID.shorten())
+    if (uniqueSubfolder.notExists())
+        uniqueSubfolder.createDirectory()
+
+    val newFile = uniqueSubfolder.resolve(part.submittedFileName).toFile()
+    newFile.writeBytes(part.inputStream.readBytes())
+
+    return randomUUID to newFile.absolutePath
 }
 
 // file uploading
@@ -33,12 +59,15 @@ private fun put() {
                 val filePart = get { req.raw().getPart("file") }
                     .orHalt(HttpStatus.BAD_REQUEST_400, "File form name configured in ShareX should be \"file\"; nothing else.")
 
-                val uuid = transaction {
+                val (uuid, fp) = writeUpload(filePart)
+
+                transaction {
                     FileEntries.insert {
+                        it[id] = EntityID(uuid, FileEntries)
                         it[type] = filePart.contentType
-                        it[data] = filePart.inputStream.blobify()
-                    } get FileEntries.id
-                }.value
+                        it[filePath] = fp
+                    }
+                }
 
                 buildString {
                     append(ServerConfig.effectiveHost(req).ensureAtEnd("/"))
@@ -83,9 +112,9 @@ private fun get() =
         resp.status(HttpStatus.OK_200)
         resp.type(fileEntry.type)
 
-        resp.raw().outputStream
-            .copyFrom(fileEntry.data.bytes.inputStream())
-            .also(OutputStream::flush)
+        val outputStream = resp.raw().outputStream
+        outputStream.write(Files.readAllBytes(Path(fileEntry.filePath)))
+        outputStream.flush()
     }
 
 
@@ -97,15 +126,17 @@ private fun afterGet() {
         }.takeIf { it?.size == 2 } ?: return@after
 
         val uuid = fileQuery.first().toUUID() ?: return@after
-        val newHits = transaction {
+        val (newHits, fileName) = transaction {
             val fileEntry = FileEntry[uuid]
 
-            fileEntry.hits.inc().also { count ->
+            val newHits = fileEntry.hits.inc().also { count ->
                 FileEntries.update {
                     it[hits] = count
                 }
             }
+
+            newHits to File(fileEntry.filePath).name
         }
-        "KShare".logger().info("$uuid is now at ${"hit".pluralize(newHits)}.")
+        "KShare".logger().info("${uuid.shorten()}/$fileName is now at ${"hit".pluralize(newHits)}.")
     }
 }

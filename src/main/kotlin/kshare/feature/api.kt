@@ -70,7 +70,7 @@ fun uploadedFileSize(req: Request, resp: Response): Any {
         .orHalt(HttpStatus.NOT_FOUND_404, "File with that UUID is not known.")
 
 
-    return fileEntry.data.bytes.size.asFileSize(fileSize)
+    return File(fileEntry.filePath).length().asFileSize(fileSize)
 }
 
 

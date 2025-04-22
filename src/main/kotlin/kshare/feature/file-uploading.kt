@@ -4,17 +4,18 @@ import daggerok.extensions.html.dom.h1
 import kshare.*
 import org.eclipse.jetty.http.HttpStatus
 import org.jetbrains.exposed.dao.id.EntityID
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import spark.Spark.*
 import java.io.File
 import java.io.OutputStream
-import java.nio.file.Files
-import java.nio.file.Path
 import java.util.UUID
 import javax.servlet.http.Part
 import kotlin.io.path.Path
+import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectory
 import kotlin.io.path.notExists
 
@@ -24,21 +25,25 @@ fun enableFileDestination() {
     afterGet()
 }
 
-fun writeUpload(part: Part): Pair<UUID, String> {
+fun writeUpload(part: Part, username: String): Pair<UUID, String> {
     val uploadsFolder = Path("uploads/")
     if (uploadsFolder.notExists())
         uploadsFolder.createDirectory()
 
+    val userFolder = uploadsFolder.resolve(username)
+    if (userFolder.notExists())
+        userFolder.createDirectory()
+
     val randomUUID = UUID.randomUUID()
 
-    val uniqueSubfolder = uploadsFolder.resolve(randomUUID.shorten())
+    val uniqueSubfolder = userFolder.resolve(randomUUID.shorten())
     if (uniqueSubfolder.notExists())
         uniqueSubfolder.createDirectory()
 
     val newFile = uniqueSubfolder.resolve(part.submittedFileName).toFile()
     newFile.writeBytes(part.inputStream.readBytes())
 
-    return randomUUID to newFile.absolutePath
+    return randomUUID to newFile.toRelativeString(uploadsFolder.toFile())
 }
 
 // file uploading
@@ -59,13 +64,16 @@ private fun put() {
                 val filePart = get { req.raw().getPart("file") }
                     .orHalt(HttpStatus.BAD_REQUEST_400, "File form name configured in ShareX should be \"file\"; nothing else.")
 
-                val (uuid, fp) = writeUpload(filePart)
+                val username = ServerConfig.getUsername(req["Authorization"])
+
+                val (uuid, fp) = writeUpload(filePart, username)
 
                 transaction {
                     FileEntries.insert {
                         it[id] = EntityID(uuid, FileEntries)
                         it[type] = filePart.contentType
-                        it[filePath] = fp
+                        it[path] = fp
+                        it[uploader] = username
                     }
                 }
 
@@ -109,12 +117,27 @@ private fun get() =
             HttpStatus.NOT_FOUND_404
         }
 
+        val fileBytes = get {
+            Path("uploads/")
+                .resolve(fileEntry.filePath).toFile()
+                .takeIf(File::exists)?.readBytes()
+        } orHalt {
+            loggedTransaction {
+                "KShare".logger().info("Deleting upload ${fileEntry.id.value.shorten()} by ${fileEntry.uploader} with ${fileEntry.hits} hits...")
+                FileEntries.deleteWhere { path eq fileEntry.filePath }
+            }
+            h1 {
+                text("Specified file not found.")
+            }
+            HttpStatus.NOT_FOUND_404
+        }
+
         resp.status(HttpStatus.OK_200)
         resp.type(fileEntry.type)
 
-        val outputStream = resp.raw().outputStream
-        outputStream.write(Files.readAllBytes(Path(fileEntry.filePath)))
-        outputStream.flush()
+        resp.raw().outputStream
+            .apply { write(fileBytes) }
+            .also(OutputStream::flush)
     }
 
 
@@ -126,7 +149,7 @@ private fun afterGet() {
         }.takeIf { it?.size == 2 } ?: return@after
 
         val uuid = fileQuery.first().toUUID() ?: return@after
-        val (newHits, fileName) = transaction {
+        val (newHits, filePath) = transaction {
             val fileEntry = FileEntry[uuid]
 
             val newHits = fileEntry.hits.inc().also { count ->
@@ -135,8 +158,8 @@ private fun afterGet() {
                 }
             }
 
-            newHits to File(fileEntry.filePath).name
+            newHits to fileEntry.filePath
         }
-        "KShare".logger().info("${uuid.shorten()}/$fileName is now at ${"hit".pluralize(newHits)}.")
+        "KShare".logger().info("$filePath is now at ${"hit".pluralize(newHits)}.")
     }
 }

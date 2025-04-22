@@ -18,7 +18,7 @@ private val defaultBlacklistedStaticFiles = arrayOf(".gitkeep", ".gitignore")
 @Suppress("ArrayInDataClass")
 @Serializable
 data class ServerConfig(
-    val validAuthKeys: Array<String> = arrayOf("1+ keys here"),                    // Authorization key for uploading files.
+    val validAuthKeys: Map<String, String> = mapOf("default" to "1+ keys here"),   // usernames -> authorization keys for uploading files.
     val host: String = "https://your-url.here",                                    // Your KShare domain, because this app only ever gives you localhost.
     val enableApi: Boolean = true,                                                 // Whether to enable the bare-bones statistics API or not.
     val port: Int = 6969, // ha, funny number                                      // The port to host the server on.
@@ -30,8 +30,10 @@ data class ServerConfig(
 
     companion object {
 
-        fun authorized(key: String?): Boolean = key in authKeys
-        fun unauthorized(key: String?): Boolean = key !in authKeys
+        fun authorized(key: String?): Boolean = key in authKeys.values
+        fun unauthorized(key: String?): Boolean = key !in authKeys.values
+
+        fun getUsername(key: String): String = authKeys.entries.firstOrNull { it.value == key }?.key ?: error("Could not find a username for that key.")
 
         fun effectiveHost(request: Request, modifier: String.() -> String = { this }): String =
             modifier(buildString(request.url()) {
@@ -58,7 +60,7 @@ data class ServerConfig(
                 write()
 
             readConfig()!!.run {
-                if (validAuthKeys.any { it == "1+ keys here" } or validAuthKeys.isEmpty()) {
+                if (validAuthKeys.any { it.key == "default" && it.value == "1+ keys here" } or validAuthKeys.isEmpty()) {
                     logger().warn("You need to provide an authKey in order to start the server.")
                     exitProcess(420)
                 }

@@ -3,8 +3,8 @@ package kshare
 import org.jetbrains.exposed.dao.*
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.UUIDTable
+import org.jetbrains.exposed.sql.Column
 import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.Table
 import java.util.*
 
 fun createTables() = loggedTransaction {
@@ -12,9 +12,10 @@ fun createTables() = loggedTransaction {
 }
 
 object FileEntries : UUIDTable() {
-    val hits = integer("hits").default(0)
-    val type = varchar("type", 50)
-    val filePath = varchar("path", 350)
+    val hits: Column<Int>  = integer(::hits.name).default(0)
+    val type: Column<String>  = varchar(::type.name, 50)
+    val path: Column<String> = varchar(::path.name, 350)
+    val uploader: Column<String> = varchar(::uploader.name, 100)
 }
 
 class FileEntry(id: EntityID<UUID>) : UUIDEntity(id) {
@@ -22,7 +23,8 @@ class FileEntry(id: EntityID<UUID>) : UUIDEntity(id) {
 
     var hits by FileEntries.hits
     var type by FileEntries.type
-    var filePath by FileEntries.filePath
+    var filePath by FileEntries.path
+    var uploader by FileEntries.uploader
 }
 
 

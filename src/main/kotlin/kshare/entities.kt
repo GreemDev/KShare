@@ -5,7 +5,11 @@ import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.sql.Column
 import org.jetbrains.exposed.sql.SchemaUtils
+import java.nio.file.Path
 import java.util.*
+import kotlin.io.path.Path
+import kotlin.io.path.exists
+import kotlin.io.path.readBytes
 
 fun createTables() = loggedTransaction {
     SchemaUtils.create(FileEntries)
@@ -25,6 +29,9 @@ class FileEntry(id: EntityID<UUID>) : UUIDEntity(id) {
     var type by FileEntries.type
     var filePath by FileEntries.path
     var uploader by FileEntries.uploader
+
+    fun resolveFilePath(): Path = Path("uploads/").resolve(filePath)
+    fun tryReadFileBytes() = resolveFilePath().takeIf { it.exists() }?.readBytes()
 }
 
 

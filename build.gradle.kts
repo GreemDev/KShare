@@ -3,7 +3,9 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 
 group = "kshare"
-version = "2.0"
+version = "2.0.3"
+
+val ver = version
 
 repositories {
     mavenCentral()
@@ -33,7 +35,7 @@ dependencies {
 }
 
 tasks.withType<ShadowJar> {
-    archiveFileName.set("kshare.jar")
+    archiveFileName.set("kshare-$ver.jar")
 }
 
 application {

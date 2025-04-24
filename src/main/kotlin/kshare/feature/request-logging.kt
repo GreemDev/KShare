@@ -12,6 +12,6 @@ fun enableRequestLogger() {
                 "?${req.queryString()}"
             }
         }
-        "KShare".logger().info("${req.requestMethod()} $location -> ${resp.status()}")
+        "Watchdog".logger().info("${req.requestMethod()} $location -> ${resp.status()}")
     }
 }

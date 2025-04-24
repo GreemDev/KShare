@@ -10,12 +10,10 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import spark.Spark.*
-import java.io.File
 import java.io.OutputStream
 import java.util.UUID
 import javax.servlet.http.Part
 import kotlin.io.path.Path
-import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectory
 import kotlin.io.path.notExists
 
@@ -118,12 +116,10 @@ private fun get() =
         }
 
         val fileBytes = get {
-            Path("uploads/")
-                .resolve(fileEntry.filePath).toFile()
-                .takeIf(File::exists)?.readBytes()
+            fileEntry.tryReadFileBytes()
         } orHalt {
             loggedTransaction {
-                "KShare".logger().info("Deleting upload ${fileEntry.id.value.shorten()} by ${fileEntry.uploader} with ${fileEntry.hits} hits...")
+                kshareLogger.info("Deleting upload ${fileEntry.id.value.shorten()} by ${fileEntry.uploader} with ${fileEntry.hits} hits...")
                 FileEntries.deleteWhere { path eq fileEntry.filePath }
             }
             h1 {
@@ -160,6 +156,6 @@ private fun afterGet() {
 
             newHits to fileEntry.filePath
         }
-        "KShare".logger().info("$filePath is now at ${"hit".pluralize(newHits)}.")
+        kshareLogger.info("$filePath is now at ${"hit".pluralize(newHits)}.")
     }
 }

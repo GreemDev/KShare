@@ -35,6 +35,8 @@ data class ServerConfig(
 
         fun getUsername(key: String): String = authKeys.entries.firstOrNull { it.value == key }?.key ?: error("Could not find a username for that key.")
 
+        fun getValidUsernames() = authKeys.keys
+
         fun effectiveHost(request: Request, modifier: String.() -> String = { this }): String =
             modifier(buildString(request.url()) {
                 if (isProduction)

@@ -4,8 +4,11 @@ import org.jetbrains.exposed.sql.Database
 import spark.*
 import spark.Spark.*
 import kshare.feature.*
+import kshare.systems.startUploadCleanSystem
 import spark.staticfiles.StaticFilesFolder
 import java.io.File
+
+val kshareLogger = "KShare".logger()
 
 
 object KShareServer {
@@ -49,5 +52,7 @@ object KShareServer {
 
         enableFileDestination()
         enableRequestLogger()
+
+        startUploadCleanSystem()
     }
 }

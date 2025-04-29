@@ -3,45 +3,18 @@ package kshare.feature
 import daggerok.extensions.html.dom.h1
 import kshare.*
 import org.eclipse.jetty.http.HttpStatus
-import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import spark.Spark.*
 import java.io.OutputStream
-import java.util.UUID
-import javax.servlet.http.Part
-import kotlin.io.path.Path
-import kotlin.io.path.createDirectory
-import kotlin.io.path.notExists
+import kotlin.io.path.extension
 
 fun enableFileDestination() {
     put()
     get()
     afterGet()
-}
-
-fun writeUpload(part: Part, username: String): Pair<UUID, String> {
-    val uploadsFolder = Path("uploads/")
-    if (uploadsFolder.notExists())
-        uploadsFolder.createDirectory()
-
-    val userFolder = uploadsFolder.resolve(username)
-    if (userFolder.notExists())
-        userFolder.createDirectory()
-
-    val randomUUID = UUID.randomUUID()
-
-    val uniqueSubfolder = userFolder.resolve(randomUUID.shorten())
-    if (uniqueSubfolder.notExists())
-        uniqueSubfolder.createDirectory()
-
-    val newFile = uniqueSubfolder.resolve(part.submittedFileName).toFile()
-    newFile.writeBytes(part.inputStream.readBytes())
-
-    return randomUUID to newFile.toRelativeString(uploadsFolder.toFile())
 }
 
 // file uploading
@@ -59,28 +32,14 @@ private fun put() {
             resp.halt(HttpStatus.FORBIDDEN_403, "Action forbidden.")
         } else {
             runCatching {
-                val filePart = get { req.raw().getPart("file") }
-                    .orHalt(HttpStatus.BAD_REQUEST_400, "File form name configured in ShareX should be \"file\"; nothing else.")
-
-                val username = ServerConfig.getUsername(req["Authorization"])
-
-                val (uuid, fp) = writeUpload(filePart, username)
-
-                transaction {
-                    FileEntries.insert {
-                        it[id] = EntityID(uuid, FileEntries)
-                        it[type] = filePart.contentType
-                        it[path] = fp
-                        it[uploader] = username
-                    }
-                }
+                val uploadedFile = FileEntries.writeUpload(req)
 
                 buildString {
                     append(ServerConfig.effectiveHost(req).ensureAtEnd("/"))
-                    append(if (prefs.contains("longuuid")) uuid else uuid.shorten())
+                    append(if (prefs.contains("longuuid")) uploadedFile.id.value else uploadedFile.id.value.shorten())
 
                     appendIf(!prefs.contains("extensionless")) {
-                        val ext = filePart.submittedFileName.split('.').last()
+                        val ext = uploadedFile.uploadedFileName().extension
                         if (ext.isNotEmpty()) ".${ext}" else ""
                     }
                 }

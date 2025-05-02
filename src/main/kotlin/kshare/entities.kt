@@ -1,5 +1,9 @@
 package kshare
 
+import kshare.util.dataBackedProperties.serializedInstant
+import kshare.util.get
+import kshare.util.loggedTransaction
+import kshare.util.shorten
 import org.eclipse.jetty.http.HttpStatus
 import org.jetbrains.exposed.dao.*
 import org.jetbrains.exposed.dao.id.EntityID
@@ -27,6 +31,7 @@ object FileEntries : UUIDTable() {
     val type: Column<String>  = varchar(::type.name, 50)
     val path: Column<String> = varchar(::path.name, 350)
     val uploader: Column<String> = varchar(::uploader.name, 100)
+    val createdAt: Column<Long> = long(::createdAt.name)
 
     fun writeUpload(req: Request): FileEntry {
         val filePart = get { req.raw().getPart("file") }
@@ -35,9 +40,8 @@ object FileEntries : UUIDTable() {
         val uploader = ServerConfig.getUsername(req["Authorization"])
 
         val uuid = UUID.randomUUID()
-        val uploadFolder = getUserFolder(uploader).getUploadFolder(uuid)
 
-        val newFile = uploadFolder.resolve(filePart.submittedFileName)
+        val newFile = getUserUploadFolder(uploader, uuid).resolve(filePart.submittedFileName)
         newFile.writeBytes(filePart.inputStream.readBytes(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
 
         return loggedTransaction {
@@ -57,10 +61,11 @@ class FileEntry(id: EntityID<UUID>) : UUIDEntity(id) {
     var type by FileEntries.type
     var filePath by FileEntries.path
     var uploader by FileEntries.uploader
+    val createdAt by serializedInstant(FileEntries.createdAt)
 
     fun uploadedFileName(): Path = resolveFilePath().fileName
 
-    fun resolveFilePath(): Path = Path("uploads/").resolve(filePath)
+    fun resolveFilePath(): Path = globalUploadsFolder.resolve(filePath)
     fun tryReadFileBytes() = resolveFilePath().takeIf { it.exists() }?.readBytes()
 }
 
@@ -78,3 +83,5 @@ fun Path.getUploadFolder(uuid: UUID): Path = resolve(uuid.shorten()).apply {
     if (notExists())
         createDirectory()
 }
+
+fun getUserUploadFolder(username: String, uuid: UUID) = getUserFolder(username).getUploadFolder(uuid)

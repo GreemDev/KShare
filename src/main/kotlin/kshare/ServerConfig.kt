@@ -2,16 +2,15 @@ package kshare
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import kshare.util.buildString
+import kshare.util.invoking
+import kshare.util.logger
+import kshare.util.prettyJson
+import kshare.util.tryOrNull
 import spark.Request
 import java.io.File
 import kotlin.properties.Delegates
 import kotlin.system.exitProcess
-
-val json = Json {
-    prettyPrint = true
-    encodeDefaults = true
-}
 
 private val defaultBlacklistedStaticFiles = arrayOf(".gitkeep", ".gitignore")
 
@@ -22,14 +21,12 @@ data class ServerConfig(
     val host: String = "https://your-url.here",                                    // Your KShare domain, because this app only ever gives you localhost.
     val enableApi: Boolean = true,                                                 // Whether to enable the bare-bones statistics API or not.
     val port: Int = 6969, // ha, funny number                                      // The port to host the server on.
-    val production: Boolean = false,                                               // Whether to use the `host` URL for uploading files or just the localhost URL.
+    val replaceHostnames: Boolean = false,                                         // Whether to use the `host` URL for uploading files or just the localhost URL.
     val allowStaticFileDiscovery: Boolean = false,                                 // Whether to allow anyone to see every file in staticFiles/ via using the `/fs` base URL with no path provided
     val blacklistedStaticFiles: Array<String> = defaultBlacklistedStaticFiles,     // Whether to allow anyone to see every file in staticFiles/ via using the `/fs` base URL with no UUID
     val dataFileName: String = "kshare"                                            // The name for your database file.
 ) {
-
     companion object {
-
         fun authorized(key: String?): Boolean = key in authKeys.values
         fun unauthorized(key: String?): Boolean = key !in authKeys.values
 
@@ -39,7 +36,7 @@ data class ServerConfig(
 
         fun effectiveHost(request: Request, modifier: String.() -> String = { this }): String =
             modifier(buildString(request.url()) {
-                if (isProduction)
+                if (replaceHostnames)
                     replace(0, "http://localhost:${port}".length.inc(), host)
             })
 
@@ -47,8 +44,9 @@ data class ServerConfig(
         val host by Delegates.invoking { readConfig()!!.host }
         val apiEnabled by Delegates.invoking { readConfig()!!.enableApi }
         val port by Delegates.invoking { readConfig()!!.port }
-        val isProduction by Delegates.invoking { readConfig()!!.production }
-        val shouldAllowStaticFileDiscovery by Delegates.invoking { tryOrNull { readConfig()!!.allowStaticFileDiscovery } ?: false }
+        val replaceHostnames by Delegates.invoking { readConfig()!!.replaceHostnames }
+        val shouldAllowStaticFileDiscovery by Delegates.invoking { tryOrNull { readConfig()!!.allowStaticFileDiscovery }
+            ?: false }
         val blacklistedStaticFiles by Delegates.invoking { tryOrNull { readConfig()!!.blacklistedStaticFiles } ?: defaultBlacklistedStaticFiles }
         val databaseRootName by Delegates.invoking { readConfig()!!.dataFileName }
 
@@ -79,12 +77,12 @@ data class ServerConfig(
         }
 
         fun write(config: ServerConfig = ServerConfig()) {
-            file.writeText(json.encodeToString(config))
+            file.writeText(prettyJson.encodeToString(config))
         }
 
         fun readConfig(): ServerConfig? =
             runCatching {
-                json.decodeFromString<ServerConfig>(file.readText())
+                prettyJson.decodeFromString<ServerConfig>(file.readText())
             }.getOrElse {
                 it.printStackTrace()
                 null

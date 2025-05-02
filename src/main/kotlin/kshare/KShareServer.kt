@@ -5,6 +5,8 @@ import spark.*
 import spark.Spark.*
 import kshare.feature.*
 import kshare.systems.startUploadCleanSystem
+import kshare.util.logger
+import kshare.util.static
 import spark.staticfiles.StaticFilesFolder
 import java.io.File
 

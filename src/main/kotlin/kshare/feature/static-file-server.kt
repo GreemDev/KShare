@@ -2,6 +2,9 @@ package kshare.feature
 
 import daggerok.extensions.html.dom.*
 import kshare.*
+import kshare.util.areAnyParentsHidden
+import kshare.util.get
+import kshare.util.halt
 import org.eclipse.jetty.http.HttpStatus.*
 import spark.Spark.*
 import java.io.File

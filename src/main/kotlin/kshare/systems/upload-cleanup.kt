@@ -3,7 +3,7 @@ package kshare.systems
 import kshare.FileEntries
 import kshare.FileEntry
 import kshare.ServerConfig
-import kshare.logger
+import kshare.util.logger
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction

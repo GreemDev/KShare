@@ -1,6 +1,10 @@
 package kshare.feature
 
 import kshare.*
+import kshare.util.appendIf
+import kshare.util.buildString
+import kshare.util.hasQueryString
+import kshare.util.logger
 import spark.Spark.*
 
 // log HTTPMethod HTTPEndpoint -> HTTPStatus in console for requests.

@@ -1,4 +1,4 @@
-package kshare
+package kshare.util
 
 import daggerok.extensions.html.dom.HtmlBuilder
 import org.eclipse.jetty.http.HttpStatus
